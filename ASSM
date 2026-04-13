@@ -1,120 +1,113 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
-from sklearn.model_selection import train_test_split
+-- =============================================================
+-- PHẦN 1: DỌN DẸP VÀ TẠO MỚI CẤU TRÚC BẢNG (DÀI & ĐẦY ĐỦ)
+-- =============================================================
 
-# ==========================================
-# 1. KHÁM PHÁ & XỬ LÝ DỮ LIỆU (GIAI ĐOẠN 1)
-# ==========================================
+-- Xóa các bảng cũ nếu đã tồn tại để tránh lỗi xung quanh khóa ngoại
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS orderdetails CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS suppliers CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
 
-def initial_eda(df):
-    """Phân tích thống kê và kiểm tra dữ liệu bẩn"""
-    print("--- Thống kê mô tả ---")
-    print(df.describe())
-    print("\n--- Giá trị thiếu ---")
-    print(df.isnull().sum())
-    print("\n--- Dữ liệu trùng lặp ---")
-    print(f"Số dòng trùng: {df.duplicated().sum()}")
+-- Tạo bảng Nhà cung cấp
+CREATE TABLE suppliers (
+    supplier_id SERIAL PRIMARY KEY,
+    supplier_name VARCHAR(100) NOT NULL
+);
 
-def remove_outliers_iqr(df, column):
-    """Xử lý Outlier bằng phương pháp IQR"""
-    Q1 = df[column].quantile(0.25)
-    Q3 = df[column].quantile(0.75)
-    IQR = Q3 - Q1
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-    
-    # Capping: Giới hạn giá trị thay vì xóa bỏ hoàn toàn
-    df[column] = np.where(df[column] > upper_bound, upper_bound,
-                 np.where(df[column] < lower_bound, lower_bound, df[column]))
-    return df
+-- Tạo bảng Sản phẩm
+CREATE TABLE products (
+    product_id SERIAL PRIMARY KEY,
+    product_name VARCHAR(100),
+    price DECIMAL(10, 2),
+    supplier_id INT REFERENCES suppliers(supplier_id)
+);
 
-def clean_data_pipeline(df):
-    """Xử lý dữ liệu lỗi logic và làm sạch cơ bản"""
-    # 1. Xóa trùng lặp
-    df = df.drop_duplicates()
-    
-    # 2. Xử lý logic (Ví dụ: diện tích và giá không được <= 0)
-    if 'area' in df.columns:
-        df = df[df['area'] > 0]
-    if 'price' in df.columns:
-        df = df[df['price'] > 0]
-        
-    # 3. Điền giá trị thiếu (Imputation)
-    # Cột số điền bằng median, cột chữ điền bằng mode
-    num_cols = df.select_dtypes(include=[np.number]).columns
-    cat_cols = df.select_dtypes(include=['object']).columns
-    
-    imputer_num = SimpleImputer(strategy='median')
-    df[num_cols] = imputer_num.fit_transform(df[num_cols])
-    
-    return df
+-- Tạo bảng Khách hàng
+CREATE TABLE customers (
+    customer_id SERIAL PRIMARY KEY,
+    full_name VARCHAR(100)
+);
 
-# ==========================================
-# 2. BIẾN ĐỔI NÂNG CAO (GIAI ĐOẠN 2)
-# ==========================================
+-- Tạo bảng Đơn hàng
+CREATE TABLE orders (
+    order_id SERIAL PRIMARY KEY,
+    customer_id INT REFERENCES customers(customer_id),
+    order_date DATE
+);
 
-def feature_engineering(df):
-    """Tạo thêm feature mới và xử lý lệch (Skewness)"""
-    # Xử lý Skewness bằng Log-Transform (cho cột giá/diện tích)
-    if 'price' in df.columns:
-        df['price_log'] = np.log1p(df['price'])
-        
-    # Tạo feature từ ngày tháng (Ví dụ: tuổi đời ngôi nhà)
-    if 'year_built' in df.columns:
-        current_year = 2026
-        df['house_age'] = current_year - df['year_built']
-    
-    # Tạo metric mới theo yêu cầu: price_per_m2
-    if 'price' in df.columns and 'area' in df.columns:
-        df['price_per_m2'] = df['price'] / df['area']
-        
-    return df
+-- Tạo bảng Chi tiết đơn hàng
+CREATE TABLE order_items (
+    order_id INT REFERENCES orders(order_id),
+    product_id INT REFERENCES products(product_id),
+    quantity INT,
+    price DECIMAL(10, 2)
+);
 
-# ==========================================
-# 3. LUỒNG CHẠY CHÍNH (MAIN)
-# ==========================================
+-- =============================================================
+-- PHẦN 2: CHÈN DỮ LIỆU MẪU (ĐỂ CHẠY ĐƯỢC KẾT QUẢ LAB 6)
+-- =============================================================
 
-def main():
-    # Bước 1: Load dữ liệu (thay tên file của bạn vào đây)
-    # df = pd.read_csv('data_assignment.csv')
-    
-    # Tạo dữ liệu giả lập để code không lỗi khi bạn chạy thử
-    data = {
-        'price': [2000, 3000, 1500, 1000000, 2500, None], # 1000000 là outlier
-        'area': [50, 60, 45, 200, 55, 50],
-        'year_built': [2010, 2015, 2000, 2020, 2018, 2012],
-        'district': ['Q1', 'Q3', 'Q1', 'Q7', 'Q3', 'Q1']
-    }
-    df = pd.DataFrame(data)
+INSERT INTO suppliers (supplier_name) VALUES 
+('Công ty Điện máy xanh'), ('Tập đoàn Samsung'), ('Nhà sách Fahasa'), ('Siêu thị WinMart');
 
-    print("--- BẮT ĐẦU XỬ LÝ ---")
-    
-    # Thực hiện Giai đoạn 1
-    initial_eda(df)
-    df = clean_data_pipeline(df)
-    df = remove_outliers_iqr(df, 'price')
-    
-    # Thực hiện Giai đoạn 2
-    df = feature_engineering(df)
-    
-    # Scaling dữ liệu số
-    scaler = StandardScaler()
-    numeric_cols = ['area', 'house_age']
-    df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
-    
-    # One-hot Encoding cho biến phân loại (Quận)
-    df = pd.get_dummies(df, columns=['district'])
+INSERT INTO products (product_name, price, supplier_id) VALUES 
+('Laptop Dell', 15000.00, 1), ('Chuột không dây', 500.00, 1), 
+('Điện thoại S24', 25000.00, 2), ('Tai nghe Buds', 3000.00, 2),
+('Sách SQL cơ bản', 150.00, 3), ('Bút bi Thiên Long', 5.00, 3),
+('Sữa tươi', 30.00, 4), ('Gạo ST25', 200.00, 4);
 
-    print("\n--- DỮ LIỆU SAU KHI LÀM SẠCH VÀ BIẾN ĐỔI ---")
-    print(df.head())
-    
-    # Lưu file kết quả
-    # df.to_csv('cleaned_data.csv', index=False)
-    print("\nDone! Sẵn sàng cho bước huấn luyện mô hình.")
+INSERT INTO customers (full_name) VALUES 
+('Nguyễn Văn Tuấn'), ('Trần Thị Lan'), ('Lê Minh Duy'), ('Phạm Hoàng Tiến');
 
-if __name__ == "__main__":
-    main()
+INSERT INTO orders (customer_id, order_date) VALUES 
+(1, '2025-10-15'), (2, '2025-10-20'), 
+(3, '2025-09-05'), (1, '2025-11-12'),
+(4, '2025-10-25');
+
+INSERT INTO order_items (order_id, product_id, quantity, price) VALUES 
+(1, 1, 10, 15000.00), -- Đơn của Tuấn
+(2, 3, 2, 25000.00),  -- Đơn của Lan
+(3, 5, 10, 150.00),   -- Đơn của Duy
+(5, 3, 5, 25000.00);  -- Đơn của Tiến
+
+-- =============================================================
+-- PHẦN 3: ĐÁP ÁN TRUY VẤN LAB 6 (KẾT QUẢ HIỂN THỊ DƯỚI ĐÂY)
+-- =============================================================
+
+-- Bài 1: Tổng quan thống kê sản phẩm
+SELECT 
+    COUNT(*) AS SoLuongSanPham,
+    AVG(price) AS GiaTrungBinh,
+    MIN(price) AS GiaReNhat,
+    MAX(price) AS GiaDatNhat
+FROM products;
+
+-- Bài 2: Phân tích nhà cung cấp có > 1 sản phẩm
+SELECT 
+    s.supplier_name, 
+    COUNT(p.product_id) AS TongSoSanPham
+FROM suppliers s
+JOIN products p ON s.supplier_id = p.supplier_id
+GROUP BY s.supplier_name
+HAVING COUNT(p.product_id) > 1;
+
+-- Bài 3: Đơn hàng tháng 10/2025 (Định dạng VN)
+SELECT 
+    order_id, 
+    TO_CHAR(order_date, 'DD/MM/YYYY') AS NgayDatHang
+FROM orders
+WHERE EXTRACT(YEAR FROM order_date) = 2025 
+  AND EXTRACT(MONTH FROM order_date) = 10;
+
+-- Bài 4: Khách hàng VIP chi tiêu > 100,000đ
+SELECT 
+    c.full_name, 
+    SUM(oi.quantity * oi.price) AS TongTienChiTieu
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+GROUP BY c.full_name
+HAVING SUM(oi.quantity * oi.price) > 100000
+ORDER BY TongTienChiTieu DESC;
