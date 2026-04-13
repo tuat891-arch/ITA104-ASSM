@@ -2,7 +2,6 @@
 -- PHẦN 1: DỌN DẸP VÀ TẠO MỚI CẤU TRÚC BẢNG (DÀI & ĐẦY ĐỦ)
 -- =============================================================
 
--- Xóa các bảng cũ nếu đã tồn tại để tránh lỗi xung quanh khóa ngoại
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orderdetails CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
@@ -10,13 +9,12 @@ DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS suppliers CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
 
--- Tạo bảng Nhà cung cấp
+
 CREATE TABLE suppliers (
     supplier_id SERIAL PRIMARY KEY,
     supplier_name VARCHAR(100) NOT NULL
 );
 
--- Tạo bảng Sản phẩm
 CREATE TABLE products (
     product_id SERIAL PRIMARY KEY,
     product_name VARCHAR(100),
@@ -24,20 +22,17 @@ CREATE TABLE products (
     supplier_id INT REFERENCES suppliers(supplier_id)
 );
 
--- Tạo bảng Khách hàng
 CREATE TABLE customers (
     customer_id SERIAL PRIMARY KEY,
     full_name VARCHAR(100)
 );
 
--- Tạo bảng Đơn hàng
 CREATE TABLE orders (
     order_id SERIAL PRIMARY KEY,
     customer_id INT REFERENCES customers(customer_id),
     order_date DATE
 );
-
--- Tạo bảng Chi tiết đơn hàng
+g
 CREATE TABLE order_items (
     order_id INT REFERENCES orders(order_id),
     product_id INT REFERENCES products(product_id),
